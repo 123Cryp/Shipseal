@@ -1,1 +1,18 @@
-.
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Deploy file is up to date
+        run: python3 -I tools/make_deploy.py --check
+      - name: Tests against the documented contract
+        run: python3 -m unittest discover -s tests
+      - name: Tests against the deploy contract
+        run: SS_CONTRACT=$PWD/contract_deploy.py python3 -m unittest discover -s tests
