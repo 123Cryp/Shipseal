@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ShipSeal - software delivery disputes, settled on PyPI evidence</title>
+<meta name="theme-color" content="#0E7C66">
+<style>
+  :root{
+    --paper:#FFFFFF; --bg:#F4F7F6; --ink:#12201C; --ink-dim:#4B5D58; --ink-faint:#7C8D88;
+    --line:#DCE5E2; --accent:#0E7C66; --accent-deep:#0A5E4D; --accent-soft:#E2F3EE;
+    --good:#1E8E5A; --good-soft:#E3F5EC; --bad:#C2453A; --bad-soft:#FBE9E7;
+    --warn:#A8710A; --warn-soft:#FBF1D9; --neutral-soft:#ECEFEE; --radius:16px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#16211E; --bg:#0E1614; --ink:#E6F0EC; --ink-dim:#A6B8B2; --ink-faint:#7F918B;
+      --line:#26362F; --accent:#3CC4A4; --accent-deep:#7BE0C8; --accent-soft:#17302A;
+      --good:#52C98C; --good-soft:#15301F; --bad:#F0867B; --bad-soft:#3A1D1A;
+      --warn:#E5B54E; --warn-soft:#352A10; --neutral-soft:#202D29;
+    }
+    button{color:#06201A}
+    button.secondary,button.ghost,button.danger{color:inherit}
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;
+       padding-bottom:calc(76px + env(safe-area-inset-bottom));min-height:100vh}
+  a{color:var(--accent-deep)}
+  code,.mono{font-family:var(--mono);font-size:.88em}
+  h1,h2,h3{margin:0;line-height:1.2;letter-spacing:-.01em}
+  h1{font-size:clamp(26px,6vw,40px)} h2{font-size:22px} h3{font-size:16px}
+  p{margin:0 0 10px}
+  .wrap{max-width:780px;margin:0 auto;padding:0 16px}
+
+  header.top{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--line)}
+  header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:10px;height:58px}
+  .brand{font-weight:800;font-size:19px;letter-spacing:-.02em;text-decoration:none;color:var(--ink)}
+  .brand span{color:var(--accent)}
+  .status-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--paper);
+               border-radius:999px;padding:7px 12px;font-size:13px;color:var(--ink-dim);cursor:pointer;max-width:60vw}
+  .status-pill .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .status-pill.connected{background:var(--good-soft);border-color:var(--good);color:var(--good);font-weight:700}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint);flex:none}
+  .dot.on{background:var(--good)}
+
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--paper);border-top:1px solid var(--line);
+           padding-bottom:env(safe-area-inset-bottom)}
+  nav.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 8px}
+  .tab-link{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:12px;
+            text-decoration:none;color:var(--ink-faint);font-size:12px;font-weight:600}
+  .tab-link svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tab-link.active{color:var(--accent-deep);background:var(--accent-soft)}
+
+  .route{display:none;padding:22px 0 30px}
+  .route.active{display:block}
+  .banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 14px;margin:14px 0;font-size:14px}
+  .banner[hidden]{display:none}
+
+  .hero{padding:6px 0 18px}
+  .hero p{color:var(--ink-dim);max-width:580px;margin-top:10px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 6px}
+  .stat{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .stat b{display:block;font-size:22px} .stat span{font-size:12px;color:var(--ink-faint)}
+
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+  .card.link{display:block;text-decoration:none;color:inherit}
+  .card.link:active{background:var(--accent-soft)}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .muted{color:var(--ink-dim)} .faint{color:var(--ink-faint);font-size:13px}
+  .terms{margin:8px 0;word-break:break-word}
+
+  .pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+  .pill.open{background:var(--accent-soft);color:var(--accent-deep)}
+  .pill.good{background:var(--good-soft);color:var(--good)}
+  .pill.bad{background:var(--bad-soft);color:var(--bad)}
+  .pill.warn{background:var(--warn-soft);color:var(--warn)}
+  .pill.neutral{background:var(--neutral-soft);color:var(--ink-dim)}
+
+  label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}
+  .hint{font-size:12.5px;color:var(--ink-faint);margin:6px 0 0}
+  input,textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);
+                        border-radius:12px;padding:12px;outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  textarea{min-height:92px;resize:vertical}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:520px){.grid2{grid-template-columns:1fr}}
+
+  button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:13px 16px;cursor:pointer;
+         background:var(--accent);color:#fff;width:100%;margin-top:14px}
+  button:active{background:var(--accent-deep)}
+  button.secondary{background:var(--accent-soft);color:var(--accent-deep)}
+  button.ghost{background:transparent;color:var(--accent-deep);border:1px solid var(--line)}
+  button.danger{background:var(--bad-soft);color:var(--bad)}
+  button:disabled{opacity:.5;cursor:default}
+
+  .out{display:none;margin-top:12px;border-radius:12px;padding:12px;font-family:var(--mono);font-size:12.5px;
+       white-space:pre-wrap;word-break:break-word;background:var(--neutral-soft);color:var(--ink-dim)}
+  .out.ok{background:var(--good-soft);color:var(--good)} .out.err{background:var(--bad-soft);color:var(--bad)}
+
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:14px}
+  .kv dt{color:var(--ink-faint)} .kv dd{margin:0;word-break:break-word}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:var(--accent-soft);color:var(--accent-deep);border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600}
+  button.chip{width:auto;margin:0;padding:6px 12px;border:1px solid transparent}
+  button.chip.off{background:var(--paper);color:var(--ink-dim);border-color:var(--line)}
+  .verdict{border-radius:var(--radius);padding:18px;margin-bottom:12px}
+  .verdict.good{background:var(--good-soft)} .verdict.bad{background:var(--bad-soft)}
+  .verdict.warn{background:var(--warn-soft)} .verdict.neutral{background:var(--neutral-soft)}
+  .verdict .big{font-size:22px;font-weight:800;letter-spacing:-.01em}
+  .checks{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:14px}
+  .checks li{display:flex;gap:8px;align-items:flex-start}
+  .mark{flex:none;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+        font-size:12px;font-weight:800;color:#fff}
+  .mark.yes{background:var(--good)} .mark.no{background:var(--bad)} .mark.na{background:var(--ink-faint)}
+  .steps{display:flex;gap:6px;margin:4px 0 14px;flex-wrap:wrap}
+  .step{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 10px;background:var(--neutral-soft);color:var(--ink-faint)}
+  .step.done{background:var(--good-soft);color:var(--good)} .step.now{background:var(--accent);color:#fff}
+  .back{display:inline-block;margin-bottom:12px;font-size:14px;text-decoration:none;font-weight:600}
+  .empty{text-align:center;color:var(--ink-faint);padding:28px 8px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);
+        border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .sheet{position:fixed;inset:0;z-index:50;background:rgba(10,20,17,.5);display:flex;align-items:flex-end;justify-content:center}
+  .sheet[hidden]{display:none}
+  .sheet-card{background:var(--paper);width:100%;max-width:780px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
+              padding:18px 16px calc(24px + env(safe-area-inset-bottom))}
+  footer{max-width:780px;margin:0 auto;padding:6px 16px 30px;color:var(--ink-faint);font-size:12.5px}
+  .check{display:flex;gap:10px;align-items:center;margin-top:12px}
+  .check input{width:auto;margin:0}
+  .urls a{display:block;word-break:break-all;margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <a class="brand" href="#/">Ship<span>Seal</span></a>
+  <div class="status-pill" id="walletPill" role="button" tabindex="0">
+    <span class="dot" id="statusDot"></span><span class="label" id="statusText">Connect wallet</span>
+  </div>
+</div></header>
+
+<div class="sheet" id="walletSheet" hidden>
+  <div class="sheet-card">
+    <div class="row"><h2>Connect</h2><button class="ghost" id="sheetClose" style="width:auto;margin:0;padding:8px 14px">Close</button></div>
+    <h3 style="margin-top:16px">Browser wallet</h3>
+    <p class="hint">MetaMask or any injected wallet. Open this page inside the wallet's own browser if your normal browser has none.</p>
+    <button id="connInjected">Connect browser wallet</button>
+    <h3 style="margin-top:22px">Private key (Studio accounts)</h3>
+    <p class="hint">Paste the private key of a GenLayer Studio account to act as that account. It stays in this tab's memory only and is only used to sign your transactions. Use testnet keys only, never a key that holds real value.</p>
+    <input id="pkInput" type="password" placeholder="0x... (64 hex characters)" autocapitalize="off" autocomplete="off" spellcheck="false">
+    <button class="secondary" id="connKey">Use this account</button>
+    <h3 style="margin-top:22px">Test session</h3>
+    <p class="hint">Generates a throwaway account for this tab. Good for reading and for trying the flow with a fresh address.</p>
+    <button class="ghost" id="connTest">Start test session</button>
+    <div class="out" id="connOut"></div>
+    <button class="ghost" id="connDisconnect" hidden>Disconnect</button>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="banner" id="configBanner" hidden>
+    No contract address is configured. Open this page with <code>?contract=0x...</code> at the end of the address,
+    or set <code>DEFAULT_CONTRACT</code> in index.html after deploying.
+  </div>
+
+  <!-- ===== Explore ===== -->
+  <section class="route" id="route-home">
+    <div class="hero">
+      <h1>Software delivery, settled on <span style="color:var(--accent)">PyPI evidence</span>.</h1>
+      <p>A client and a developer both stake GEN against an exact package release. The contract reads the release record on pypi.org, checks it field by field, and treats a missing release as evidence only when the project index confirms it.</p>
+      <div class="stats">
+        <div class="stat"><b id="statTotal">-</b><span>deals</span></div>
+        <div class="stat"><b id="statLive">-</b><span>in progress</span></div>
+        <div class="stat"><b id="statDone">-</b><span>finalized</span></div>
+      </div>
+    </div>
+    <div class="row"><h2>Explore</h2><a href="#/new" style="font-weight:700;text-decoration:none">+ New deal</a></div>
+    <div class="chips" id="filterChips" style="margin:12px 0"></div>
+    <input id="filterInput" placeholder="Search package, version, scope or address" style="margin:0 0 12px">
+    <div id="dealList"></div>
+    <button class="ghost" id="moreBtn" hidden>Load more</button>
+    <button class="ghost" id="refreshBtn">Refresh</button>
+  </section>
+
+  <!-- ===== Create ===== -->
+  <section class="route" id="route-new">
+    <h2>New deal</h2>
+    <p class="muted">You become the client (party A) and your stake is escrowed now. The developer (party B) must match it exactly to accept. Everything below is recorded on-chain before anyone knows how a dispute will go.</p>
+    <div class="card">
+      <label for="fPartyB">Developer address (party B)</label>
+      <input id="fPartyB" placeholder="0x..." autocapitalize="off" autocomplete="off" spellcheck="false">
+      <label for="fScope">Scope of the agreement</label>
+      <textarea id="fScope" placeholder="Publish widget 1.0.0 to PyPI as a wheel and an sdist"></textarea>
+      <label for="fCriteria">Delivery criteria</label>
+      <textarea id="fCriteria" placeholder="The package description documents a command line interface and requires Python 3.9 or newer"></textarea>
+      <p class="hint">Plain text. Once every structured check passes, a model checks the release metadata against this. It can only confirm or withhold; it cannot award the pot on its own.</p>
+      <div class="grid2">
+        <div><label for="fPackage">PyPI package</label><input id="fPackage" placeholder="widget" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
+        <div><label for="fVersion">Exact version</label><input id="fVersion" placeholder="1.0.0" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <p class="hint">Use the canonical form PyPI reports, for example 1.2.0 or 2.0.0rc1.</p>
+      <label>Required artifact kinds</label>
+      <label class="check"><input type="checkbox" id="kWheel" checked> wheel (.whl)</label>
+      <label class="check"><input type="checkbox" id="kSdist" checked> sdist (.tar.gz)</label>
+      <p class="hint">If at least one required kind is published on time but another is missing, the outcome is partially delivered.</p>
+      <label for="fSha">Expected sha256 (optional)</label>
+      <input id="fSha" placeholder="64 hex characters, one required file must carry it" autocapitalize="off" autocomplete="off" spellcheck="false">
+      <label for="fRepo">Expected source repository</label>
+      <input id="fRepo" placeholder="https://github.com/owner/repo" autocapitalize="off" autocomplete="off" spellcheck="false">
+      <p class="hint">The release metadata (project URLs or home page) must link to this repository.</p>
+      <div class="grid2">
+        <div><label for="fStake">Your stake (GEN)</label><input id="fStake" inputmode="decimal" placeholder="1.0"></div>
+        <div><label for="fDeadline">Deadline</label><input id="fDeadline" type="datetime-local"></div>
+      </div>
+      <p class="hint">Deadline between 1 hour and 90 days from now. Evidence host is fixed to pypi.org.</p>
+      <button class="secondary" id="previewBtn">Check the project on PyPI</button>
+      <div class="out" id="previewOut"></div>
+      <button id="createBtn">Create deal</button>
+      <div class="out" id="createOut"></div>
+    </div>
+  </section>
+
+  <!-- ===== Deal detail ===== -->
+  <section class="route" id="route-deal">
+    <a class="back" href="#/">&larr; All deals</a>
+    <div id="dealView"></div>
+  </section>
+
+  <!-- ===== Jury ===== -->
+  <section class="route" id="route-jury">
+    <h2>Jurors</h2>
+    <p class="muted">Stake GEN to be eligible for appeal juries. Selection weight is capped, and only jurors registered before a deal was accepted can be drawn for it.</p>
+    <div class="card">
+      <h3>Register or top up</h3>
+      <label for="jStake">Stake to add (GEN)</label>
+      <input id="jStake" inputmode="decimal" value="1.0">
+      <button id="jRegisterBtn">Register / add stake</button>
+      <label for="jUnstake">Unstake amount (GEN)</label>
+      <input id="jUnstake" inputmode="decimal" placeholder="0.5">
+      <button class="secondary" id="jUnstakeBtn">Unstake</button>
+      <div class="out" id="jOut"></div>
+    </div>
+    <div class="card">
+      <h3>Juror record</h3>
+      <label for="jAddr">Address</label>
+      <input id="jAddr" placeholder="0x... (blank = connected wallet)" autocapitalize="off" autocomplete="off" spellcheck="false">
+      <button class="secondary" id="jLookupBtn">Get juror record</button>
+      <div class="out" id="jLookupOut"></div>
+    </div>
+  </section>
+
+  <!-- ===== Withdraw ===== -->
+  <section class="route" id="route-withdraw">
+    <h2>Balance</h2>
+    <p class="muted">Payouts are credited here first. Withdraw sends your whole balance to your own wallet.</p>
+    <div class="card">
+      <div class="row"><span class="muted">Your pending balance</span><b id="myPending">-</b></div>
+      <button id="withdrawBtn">Withdraw my balance</button>
+      <button class="ghost" id="checkPendingBtn">Refresh balance</button>
+      <div class="out" id="wOut"></div>
+    </div>
+    <div class="card">
+      <h3>Check any address</h3>
+      <label for="wAddr">Address</label>
+      <input id="wAddr" placeholder="0x..." autocapitalize="off" autocomplete="off" spellcheck="false">
+      <button class="secondary" id="wLookupBtn">Check pending balance</button>
+      <div class="row" style="margin-top:14px"><span class="muted">Total held by contract</span><b id="contractBal">-</b></div>
+      <div class="out" id="wLookupOut"></div>
+    </div>
+    <div class="card">
+      <h3>Fund a Studio account (testnet only)</h3>
+      <p class="hint">GenLayer Studio is a simulator, so it can credit test GEN to any address. This asks the Studio RPC to do it. It is an experimental call: if the response shows an error, the Studio version may not support it.</p>
+      <label for="fundAddr">Address (blank = connected wallet)</label>
+      <input id="fundAddr" placeholder="0x..." autocapitalize="off" autocomplete="off" spellcheck="false">
+      <label for="fundAmt">Amount (whole GEN, 1 to 100)</label>
+      <input id="fundAmt" inputmode="numeric" value="10">
+      <button class="secondary" id="fundBtn">Request test GEN</button>
+      <div class="out" id="fundOut"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  ShipSeal on GenLayer Studio &middot; contract <span class="mono" id="contractAddrText"></span><br>
+  No-build reference frontend (genlayer-js). See ARCHITECTURE.md for the trust model and known limitations.
+</footer>
+
+<nav class="tabs"><div class="wrap">
+  <a class="tab-link" data-tab="home" href="#/">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Explore</a>
+  <a class="tab-link" data-tab="new" href="#/new">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>New</a>
+  <a class="tab-link" data-tab="jury" href="#/jury">
+    <svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>Jury</a>
+  <a class="tab-link" data-tab="withdraw" href="#/withdraw">
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Balance</a>
+</div></nav>
+
+<script type="module">
+import { createClient, createAccount } from "https://esm.sh/genlayer-js@latest";
+import { studionet } from "https://esm.sh/genlayer-js@latest/chains";
+
+const DEFAULT_CONTRACT = "0x0000000000000000000000000000000000000000";
+const queryContract = new URLSearchParams(location.search).get("contract") || "";
+const CONTRACT_ADDRESS = /^0x[0-9a-fA-F]{40}$/.test(queryContract) ? queryContract : DEFAULT_CONTRACT;
+const NOT_CONFIGURED = /^0x0{40}$/.test(CONTRACT_ADDRESS);
+const VOTES = ["DELIVERED", "PARTIALLY_DELIVERED", "NOT_DELIVERED", "UNDETERMINED"];
+const PAGE_SIZE = 20;
+
+const $ = (id) => document.getElementById(id);
+$("contractAddrText").textContent = NOT_CONFIGURED ? "not set" : CONTRACT_ADDRESS.slice(0, 8) + "..." + CONTRACT_ADDRESS.slice(-6);
+$("configBanner").hidden = !NOT_CONFIGURED;
+
+/* ---------- tiny DOM helper: never innerHTML, so contract data is always text ---------- */
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    el.appendChild(typeof kid === "string" || typeof kid === "number" ? document.createTextNode(String(kid)) : kid);
+  }
+  return el;
+}
+const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
+const short = (a) => (a ? a.slice(0, 6) + "..." + a.slice(-4) : "-");
+const same = (a, b) => !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
+const fmtTime = (iso) => { try { return new Date(iso).toLocaleString(); } catch (e) { return String(iso); } };
+const ms = (iso) => { try { return new Date(iso).getTime(); } catch (e) { return NaN; } };
+const isPast = (iso) => Date.now() > ms(iso);
+const safeLink = (url, label) => /^https:\/\//.test(url || "") ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", text: label || url }) : h("span", { text: url || "" });
+
+function showOut(el, text, kind) {
+  el.style.display = "block";
+  el.textContent = typeof text === "string" ? text : JSON.stringify(text, null, 2);
+  el.classList.remove("ok", "err");
+  if (kind) el.classList.add(kind);
+}
+
+/* ---------- GEN <-> wei, exact BigInt only ---------- */
+const WEI_PER_GEN = 1000000000000000000n;
+function genToWei(s) {
+  const t = String(s).trim();
+  if (!t) return null;
+  const p = t.split(".");
+  if (p.length > 2) return null;
+  const whole = p[0] || "0";
+  const frac = p[1] || "";
+  if (!/^\d+$/.test(whole) || (frac && !/^\d+$/.test(frac)) || frac.length > 18) return null;
+  try { return BigInt(whole) * WEI_PER_GEN + BigInt(frac.padEnd(18, "0") || "0"); } catch (e) { return null; }
+}
+function weiToGen(w) {
+  let wei;
+  try { wei = BigInt(w); } catch (e) { return String(w); }
+  const frac = (wei % WEI_PER_GEN).toString().padStart(18, "0").replace(/0+$/, "");
+  return frac ? `${wei / WEI_PER_GEN}.${frac}` : (wei / WEI_PER_GEN).toString();
+}
+
+/* ---------- wallet ---------- */
+let client = null;
+let account = null;
+let usingInjected = false;
+function hexChainId() { return "0x" + Number(studionet.id).toString(16); }
+async function ensureChain() {
+  if (!usingInjected || !window.ethereum) return;
+  const cur = await window.ethereum.request({ method: "eth_chainId" });
+  if (String(cur).toLowerCase() === hexChainId().toLowerCase()) return;
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hexChainId() }] });
+  } catch (e) {
+    await window.ethereum.request({
+      method: "wallet_addEthereumChain",
+      params: [{
+        chainId: hexChainId(),
+        chainName: studionet.name || "GenLayer Studio",
+        nativeCurrency: studionet.nativeCurrency || { name: "GEN", symbol: "GEN", decimals: 18 },
+        rpcUrls: studionet.rpcUrls?.default?.http || [],
+      }],
+    });
+  }
+}
+const readClient = createClient({ chain: studionet });
+
+function setStatus(on, label) {
+  $("statusDot").classList.toggle("on", on);
+  $("walletPill").classList.toggle("connected", on);
+  $("statusText").textContent = label;
+}
+const sheet = $("walletSheet");
+function openSheet() { $("connDisconnect").hidden = !client; $("connOut").style.display = "none"; sheet.hidden = false; }
+function closeSheet() { sheet.hidden = true; $("pkInput").value = ""; }
+function connected(label) { setStatus(true, label); closeSheet(); route(); }
+
+async function connectInjected() {
+  const out = $("connOut");
+  if (!window.ethereum) {
+    showOut(out, "No browser wallet found in this browser. Open this page inside your wallet app's browser, or use a private key below.", "err");
+    return;
+  }
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    account = accounts[0];
+    client = createClient({ chain: studionet, account });
+    usingInjected = true;
+    try { await ensureChain(); } catch (e) { showOut(out, "Connected, but could not switch the wallet to the GenLayer Studio network: " + (e?.message || String(e)), "err"); }
+    connected(short(account));
+  } catch (e) { showOut(out, "Connection failed: " + (e?.message || String(e)), "err"); }
+}
+function connectKey() {
+  const out = $("connOut");
+  let pk = $("pkInput").value.trim();
+  if (/^[0-9a-fA-F]{64}$/.test(pk)) pk = "0x" + pk;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) return showOut(out, "That is not a valid private key: expected 64 hex characters, optionally starting with 0x.", "err");
+  try {
+    const acct = createAccount(pk);
+    account = acct.address;
+    usingInjected = false;
+    client = createClient({ chain: studionet, account: acct });
+    connected(short(account));
+  } catch (e) { showOut(out, "Could not use this key: " + (e?.message || String(e)), "err"); }
+}
+function startTestSession() {
+  const generated = createAccount();
+  account = generated.address ?? generated;
+  usingInjected = false;
+  client = createClient({ chain: studionet, account: generated });
+  connected("Test " + short(account));
+}
+function disconnect() { client = null; account = null; setStatus(false, "Connect wallet"); closeSheet(); route(); }
+$("walletPill").addEventListener("click", openSheet);
+$("sheetClose").addEventListener("click", closeSheet);
+sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+$("connInjected").addEventListener("click", connectInjected);
+$("connKey").addEventListener("click", connectKey);
+$("connTest").addEventListener("click", startTestSession);
+$("connDisconnect").addEventListener("click", disconnect);
+
+function needClient(out) {
+  if (client) return true;
+  showOut(out, "Tap the wallet button at the top to connect first.", "err");
+  openSheet();
+  return false;
+}
+
+/* ---------- contract calls ---------- */
+function unwrap(receipt) {
+  let v = receipt?.consensus_data?.leader_receipt?.[0]?.result?.payload?.readable;
+  if (v === undefined) return null;
+  for (let i = 0; i < 3; i++) {
+    if (typeof v !== "string") break;
+    const t = v.trim();
+    if (!(t.startsWith("{") || t.startsWith("[") || t.startsWith('"'))) break;
+    try { v = JSON.parse(v); } catch (e) { break; }
+  }
+  return v;
+}
+async function read(functionName, args = []) {
+  return readClient.readContract({ address: CONTRACT_ADDRESS, functionName, args });
+}
+async function readJson(functionName, args = []) {
+  const raw = await read(functionName, args);
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+async function write(out, label, functionName, args, valueWei) {
+  if (NOT_CONFIGURED) { showOut(out, "No contract address is configured for this page.", "err"); return null; }
+  if (!needClient(out)) return null;
+  try {
+    showOut(out, `Sending ${label}... check your wallet for a confirmation request.`);
+    await ensureChain();
+    const slow = setTimeout(() => showOut(out,
+      `Still waiting for the wallet to answer ${label}.\nOpen your wallet app and look for a pending request. If none appears, the wallet is probably on the wrong network.`), 20000);
+    let hash;
+    try { hash = await client.writeContract({ address: CONTRACT_ADDRESS, functionName, args, value: valueWei ?? 0n }); }
+    finally { clearTimeout(slow); }
+    showOut(out, `Sent ${short(hash)}. Waiting for finalization...`);
+    let receipt;
+    try { receipt = await client.waitForTransactionReceipt({ hash, status: "FINALIZED", interval: 4000, retries: 60 }); }
+    catch (e) {
+      showOut(out, "The transaction was sent but is not finalized yet. Validators may still be working; refresh this page in a few minutes to see the result.\n\nTx: " + hash);
+      return null;
+    }
+    const result = unwrap(receipt);
+    const failed = receipt?.consensus_data?.leader_receipt?.[0]?.execution_result === "ERROR";
+    if (failed) { showOut(out, "The contract rejected this call. Check the details and try again.\n\nTx: " + hash, "err"); return null; }
+    showOut(out, "Done.\n\nTx: " + hash, "ok");
+    return result === null ? true : result;
+  } catch (e) {
+    showOut(out, "Error: " + (e?.message || String(e)), "err");
+    return null;
+  }
+}
+
+/* ---------- config and status helpers ---------- */
+let configCache = null;
+async function getConfig() {
+  if (configCache) return configCache;
+  try { configCache = await readJson("get_config"); } catch (e) { configCache = null; }
+  return configCache;
+}
+const FALLBACK_CONFIG = { absence_grace_seconds: 3600, resolution_timeout_seconds: 604800, appeal_bond_bps: 2000,
+  min_appeal_bond: "1000000000000000", max_appeal_bond: "1000000000000000000000000000000", jury_size: 5 };
+
+const STEPS = [["created", "Created"], ["open", "Accepted"], ["tier1_resolved", "Outcome"], ["appealed", "Appeal"], ["finalized", "Final"]];
+const STATUS_LABEL = {
+  created: "Waiting for developer", open: "Awaiting delivery", tier1_resolved: "Outcome issued",
+  appeal_filed: "Appeal filed", appealed: "Under appeal", finalized: "Finalized", cancelled: "Cancelled",
+};
+const OUTCOME_LABEL = { DELIVERED: "Delivered", PARTIALLY_DELIVERED: "Partially delivered", NOT_DELIVERED: "Not delivered", UNDETERMINED: "Undetermined" };
+const outcomeOf = (d) => d.final_outcome || d.tier1_outcome || null;
+function toneOf(d) {
+  if (d.status === "cancelled") return "neutral";
+  const o = outcomeOf(d);
+  if (!o) return "open";
+  if (d.status !== "finalized") return "warn";
+  if (o === "DELIVERED") return "good";
+  if (o === "NOT_DELIVERED") return "bad";
+  if (o === "PARTIALLY_DELIVERED") return "warn";
+  return "neutral";
+}
+const pillText = (d) => d.status === "cancelled" ? "CANCELLED" : (outcomeOf(d) ? OUTCOME_LABEL[outcomeOf(d)] : (STATUS_LABEL[d.status] || d.status));
+const CHECK_LABELS = [
+  ["identity", "PyPI reports exactly this project name and version"],
+  ["window", "Files were uploaded between creation and the deadline"],
+  ["not_yanked", "The release is not yanked"],
+  ["repo", "The metadata links to the agreed repository"],
+  ["kinds", "Every required artifact kind is present"],
+  ["sha256", "A required file carries the agreed sha256"],
+  ["absence", "Absence proven: version endpoint 404 and the project index lacks it"],
+];
+
+/* ---------- Explore ---------- */
+let loaded = [];
+let total = 0;
+let activeFilter = "all";
+const FILTERS = [
+  ["all", "All"], ["created", "Waiting"], ["open", "Awaiting delivery"], ["tier1_resolved", "Outcome issued"],
+  ["appeal", "Appeals"], ["finalized", "Final"], ["mine", "Mine"],
+];
+function matchesFilter(d) {
+  if (activeFilter === "all") return true;
+  if (activeFilter === "appeal") return d.status === "appeal_filed" || d.status === "appealed";
+  if (activeFilter === "mine") return !!account && (same(account, d.party_a) || same(account, d.party_b));
+  return d.status === activeFilter;
+}
+function renderChips() {
+  const box = clear($("filterChips"));
+  for (const [key, label] of FILTERS) {
+    box.appendChild(h("button", { class: "chip" + (key === activeFilter ? "" : " off"), text: label, onclick: () => { activeFilter = key; renderChips(); renderList(); } }));
+  }
+}
+async function loadList(append) {
+  const list = $("dealList");
+  if (!append) { loaded = []; clear(list).appendChild(h("div", { class: "empty" }, h("span", { class: "spin" }), "Loading deals...")); }
+  if (NOT_CONFIGURED) { clear(list).appendChild(h("div", { class: "empty", text: "Set a contract address to browse deals." })); return; }
+  try {
+    const page = await readJson("list_deals", [loaded.length, PAGE_SIZE]);
+    total = Number(page.total);
+    loaded = loaded.concat(page.deals || []);
+    $("statTotal").textContent = String(total);
+    const stats = await readJson("get_stats").catch(() => null);
+    if (stats) {
+      const by = stats.by_status || {};
+      $("statDone").textContent = String(by.finalized || 0);
+      $("statLive").textContent = String(Object.entries(by).filter(([k]) => !["finalized", "cancelled"].includes(k)).reduce((n, [, v]) => n + v, 0));
+    }
+    renderList();
+  } catch (e) {
+    clear(list).appendChild(h("div", { class: "empty" }, "Could not load deals. The network may be unreachable; tap Refresh to retry."));
+  }
+}
+function renderList() {
+  const list = clear($("dealList"));
+  const q = $("filterInput").value.trim().toLowerCase();
+  const rows = loaded.filter(matchesFilter).filter((d) =>
+    !q || [d.deal_id, d.package, d.version, d.scope, d.party_a, d.party_b, d.status, outcomeOf(d) || ""].join(" ").toLowerCase().includes(q));
+  if (!rows.length) {
+    list.appendChild(h("div", { class: "empty", text: loaded.length ? "No deals match this filter." : "No deals yet. Create the first one." }));
+  }
+  for (const d of rows) {
+    list.appendChild(h("a", { class: "card link", href: `#/deal/${d.deal_id}` },
+      h("div", { class: "row" },
+        h("b", { text: `${d.package} ${d.version}` }),
+        h("span", { class: `pill ${toneOf(d)}`, text: pillText(d) })),
+      h("div", { class: "terms", text: d.scope }),
+      h("div", { class: "row faint" },
+        h("span", { text: `${d.deal_id} - ${short(d.party_a)} to ${short(d.party_b)}` }),
+        h("span", { text: `${weiToGen(d.stake_amount)} GEN each` }))));
+  }
+  $("moreBtn").hidden = loaded.length >= total;
+}
+$("filterInput").addEventListener("input", renderList);
+$("refreshBtn").addEventListener("click", () => loadList(false));
+$("moreBtn").addEventListener("click", () => loadList(true));
+
+/* ---------- Create ---------- */
+function defaultDeadline() {
+  const d = new Date(Date.now() + 26 * 3600000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+$("fDeadline").value = defaultDeadline();
+const canonName = (s) => String(s).trim().toLowerCase().replace(/[-_.]+/g, "-");
+
+$("previewBtn").addEventListener("click", async () => {
+  const out = $("previewOut");
+  const pkg = $("fPackage").value.trim();
+  const ver = $("fVersion").value.trim();
+  if (!/^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(pkg)) return showOut(out, "Enter a valid package name first.", "err");
+  try {
+    showOut(out, "Asking pypi.org...");
+    const res = await fetch(`https://pypi.org/pypi/${encodeURIComponent(canonName(pkg))}/json`);
+    if (res.status === 404) return showOut(out, "pypi.org has no project with this name. If the developer never publishes, absence cannot be proven (a typo looks the same), and the deal can only end as undetermined. Publish a placeholder release first, or check the name.", "err");
+    if (!res.ok) return showOut(out, "pypi.org answered " + res.status + ". Try again later.", "err");
+    const data = await res.json();
+    const versions = Object.keys(data.releases || {});
+    const exists = ver && versions.some((v) => v === ver);
+    showOut(out, `Project found: ${data.info?.name} (${versions.length} release${versions.length === 1 ? "" : "s"}).\n` +
+      (ver ? (exists ? `WARNING: version ${ver} already exists. Files uploaded before the deal is created do not count, so this deal could not end as delivered.` : `Version ${ver} does not exist yet. Good.`) : "Enter the exact version to check it too."), exists ? "err" : "ok");
+  } catch (e) {
+    showOut(out, "Could not reach pypi.org from this browser: " + (e?.message || String(e)), "err");
+  }
+});
+
+$("createBtn").addEventListener("click", async () => {
+  const out = $("createOut");
+  if (!needClient(out)) return;
+  const v = (id) => $(id).value.trim();
+  const stakeWei = genToWei(v("fStake"));
+  const deadline = new Date(v("fDeadline"));
+  const kinds = [$("kWheel").checked ? "wheel" : null, $("kSdist").checked ? "sdist" : null].filter(Boolean).join(",");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(v("fPartyB"))) return showOut(out, "Enter the developer's 0x address.", "err");
+  if (same(v("fPartyB"), account)) return showOut(out, "The developer must be a different address from yours.", "err");
+  if (!v("fScope")) return showOut(out, "Describe the scope.", "err");
+  if (!v("fCriteria")) return showOut(out, "Enter the delivery criteria.", "err");
+  if (!/^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(v("fPackage"))) return showOut(out, "Enter a valid PyPI package name.", "err");
+  if (!/^(0|[1-9]\d*)(\.(0|[1-9]\d*))*((a|b|rc)(0|[1-9]\d*))?(\.post(0|[1-9]\d*))?(\.dev(0|[1-9]\d*))?$/.test(v("fVersion"))) return showOut(out, "The version must be canonical, for example 1.2.0 or 2.0.0rc1.", "err");
+  if (!kinds) return showOut(out, "Tick at least one required artifact kind.", "err");
+  if (v("fSha") && !/^[0-9a-fA-F]{64}$/.test(v("fSha"))) return showOut(out, "The sha256 must be 64 hex characters or empty.", "err");
+  if (!/^https:\/\/[^/\s]+\/[^/\s]+\/[^/\s]+/.test(v("fRepo"))) return showOut(out, "The repository must look like https://github.com/owner/repo.", "err");
+  if (stakeWei === null || stakeWei <= 0n) return showOut(out, "Enter a valid positive stake in GEN.", "err");
+  if (isNaN(deadline.getTime())) return showOut(out, "Enter a valid deadline.", "err");
+  const leadH = (deadline.getTime() - Date.now()) / 3600000;
+  if (leadH < 1.05 || leadH > 89.9 * 24) return showOut(out, "The deadline must be between 1 hour and 90 days from now.", "err");
+  const id = await write(out, "create_deal", "create_deal",
+    [v("fPartyB"), v("fScope"), v("fCriteria"), v("fPackage"), v("fVersion"), v("fSha").toLowerCase(), kinds, v("fRepo"), deadline.toISOString()], stakeWei);
+  if (!id) return;
+  if (typeof id === "string" && /^deal_\d+$/.test(id)) { location.hash = `#/deal/${id}`; return; }
+  try { const n = Number(await read("total_deals")); location.hash = n > 0 ? `#/deal/deal_${n - 1}` : "#/"; } catch (e) { location.hash = "#/"; }
+});
+
+/* ---------- Deal detail ---------- */
+const savedKey = (id) => `shipseal:${CONTRACT_ADDRESS}:${id}:${(account || "").toLowerCase()}`;
+function saveVote(id, vote, salt) { try { localStorage.setItem(savedKey(id), JSON.stringify({ vote, salt })); } catch (e) { /* storage may be unavailable */ } }
+function loadVote(id) { try { return JSON.parse(localStorage.getItem(savedKey(id)) || "null"); } catch (e) { return null; } }
+async function sha256Hex(text) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function randomSalt() { const a = new Uint8Array(12); crypto.getRandomValues(a); return Array.from(a).map((b) => b.toString(16).padStart(2, "0")).join(""); }
+function appealBondWei(stakeWei, cfg) {
+  const c = cfg || FALLBACK_CONFIG;
+  let b = (BigInt(stakeWei) * BigInt(c.appeal_bond_bps)) / 10000n;
+  const lo = BigInt(c.min_appeal_bond), hi = BigInt(c.max_appeal_bond);
+  if (b < lo) b = lo;
+  if (b > hi) b = hi;
+  return b;
+}
+function kv(pairs) {
+  const dl = h("dl", { class: "kv" });
+  for (const [k, v] of pairs) {
+    if (v === null || v === undefined || v === "") continue;
+    dl.appendChild(h("dt", { text: k }));
+    dl.appendChild(h("dd", null, v));
+  }
+  return dl;
+}
+function actionCard(title, note, ...body) {
+  return h("div", { class: "card" }, h("h3", { text: title }), note ? h("p", { class: "hint", text: note }) : null, ...body);
+}
+let currentDealId = null;
+function actionButton(label, kind, handler) {
+  const out = h("div", { class: "out" });
+  const btn = h("button", { class: kind || "", text: label });
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try { const r = await handler(out); if (r) setTimeout(() => renderDeal(currentDealId), 600); }
+    finally { btn.disabled = false; }
+  });
+  return [btn, out];
+}
+
+async function renderDeal(id) {
+  currentDealId = id;
+  const view = clear($("dealView"));
+  if (NOT_CONFIGURED) { view.appendChild(h("div", { class: "empty", text: "Set a contract address to view deals." })); return; }
+  view.appendChild(h("div", { class: "empty" }, h("span", { class: "spin" }), "Loading " + id + "..."));
+  let d;
+  try { d = await readJson("get_deal", [id]); }
+  catch (e) { clear(view).appendChild(h("div", { class: "empty" }, "Deal not found: " + id)); return; }
+  const cfg = (await getConfig()) || FALLBACK_CONFIG;
+  clear(view);
+
+  const o = outcomeOf(d);
+  const isA = same(account, d.party_a), isB = same(account, d.party_b);
+  const role = isA ? "You are the client (party A)" : isB ? "You are the developer (party B)" : null;
+
+  view.appendChild(h("div", { class: "row", style: "margin-bottom:6px" },
+    h("h2", { text: `${d.package} ${d.version}` }),
+    h("span", { class: `pill ${toneOf(d)}`, text: STATUS_LABEL[d.status] || d.status })));
+  view.appendChild(h("p", { class: "faint", text: d.deal_id + (role ? " - " + role : "") }));
+
+  if (d.status !== "cancelled") {
+    const key = d.status === "appeal_filed" ? "appealed" : d.status;
+    const idx = STEPS.findIndex((s) => s[0] === key);
+    const steps = h("div", { class: "steps" });
+    STEPS.forEach((s, i) => {
+      if (s[0] === "appealed" && !d.appeal) return;
+      steps.appendChild(h("span", { class: "step " + (i < idx ? "done" : i === idx ? "now" : ""), text: s[1] }));
+    });
+    view.appendChild(steps);
+  }
+
+  /* outcome and the structured checks behind it */
+  if (d.tier1_outcome) {
+    const final = d.status === "finalized" && d.final_outcome;
+    const box = h("div", { class: `verdict ${toneOf(d)}` },
+      h("div", { class: "faint", text: final ? "Final outcome" : "Automated outcome (can be appealed)" }),
+      h("div", { class: "big", text: OUTCOME_LABEL[o] || o }),
+      d.tier1_summary ? h("p", { class: "muted", style: "margin-top:8px", text: d.tier1_summary }) : null,
+      d.tier1_reasoning ? h("p", { class: "muted", text: "Model note: " + d.tier1_reasoning }) : null);
+    if (final && d.final_outcome !== d.tier1_outcome) box.appendChild(h("p", { class: "faint", text: "Changed by the jury from " + (OUTCOME_LABEL[d.tier1_outcome] || d.tier1_outcome) + "." }));
+    const list = h("ul", { class: "checks" });
+    for (const [key, label] of CHECK_LABELS) {
+      const val = d.tier1_checks ? d.tier1_checks[key] : null;
+      if (val === null || val === undefined) continue;
+      list.appendChild(h("li", null, h("span", { class: "mark " + (val ? "yes" : "no"), text: val ? "✓" : "✗" }), h("span", { text: label })));
+    }
+    box.appendChild(list);
+    view.appendChild(box);
+  }
+
+  /* anchors */
+  const rel = d.evidence_urls || {};
+  view.appendChild(h("div", { class: "card" },
+    h("p", { class: "terms", text: d.scope }),
+    h("p", { class: "muted", text: "Criteria: " + d.delivery_criteria }),
+    kv([
+      ["Client (A)", h("span", { class: "mono", text: d.party_a })],
+      ["Developer (B)", h("span", { class: "mono", text: d.party_b })],
+      ["Stake", `${weiToGen(d.stake_amount)} GEN each`],
+      ["Package", safeLink(`https://pypi.org/project/${encodeURIComponent(d.package_normalized)}/${encodeURIComponent(d.version)}/`, `${d.package} ${d.version} on PyPI`)],
+      ["Required kinds", h("div", { class: "chips" }, (d.required_kinds || []).map((k) => h("span", { class: "chip", text: k })))],
+      ["Expected sha256", d.expected_sha256 ? h("span", { class: "mono", text: d.expected_sha256 }) : "not pinned"],
+      ["Source repository", safeLink(d.expected_repo_url)],
+      ["Deadline", fmtTime(d.deadline)],
+      ["Created", fmtTime(d.created_at)],
+      ["Evidence host", d.allowed_evidence_host],
+    ]),
+    h("div", { class: "urls", style: "margin-top:12px" }, h("div", { class: "faint", text: "Evidence the contract reads (derived from the anchors)" }),
+      safeLink(rel.release), safeLink(rel.index))));
+
+  if (d.evidence_root) {
+    view.appendChild(h("div", { class: "card" }, h("h3", { text: "Frozen evidence" }),
+      h("p", { class: "hint", text: "Stored on-chain at the automated outcome. Jurors and validators judge exactly this, never a fresh fetch." }),
+      kv([["Evidence root", h("span", { class: "mono", text: d.evidence_root })], ["Frozen at", fmtTime(d.tier1_resolved_at)]])));
+  }
+
+  if (d.jury) {
+    const j = d.jury;
+    view.appendChild(h("div", { class: "card" }, h("h3", { text: "Appeal jury" }),
+      kv([
+        ["Appellant", h("span", { class: "mono", text: short(d.appeal?.appellant) })],
+        ["Bond", d.appeal ? `${weiToGen(d.appeal.bond_amount)} GEN` : ""],
+        ["Commit until", fmtTime(j.commit_deadline)], ["Reveal until", fmtTime(j.reveal_deadline)],
+        ["Commits / reveals", `${Object.keys(j.commits || {}).length} / ${Object.keys(j.reveals || {}).length}`],
+        ["Jury result", j.verification_passed === true ? "verified: " + j.provisional_outcome : (j.provisional_outcome ? "not supported by the evidence: " + j.provisional_outcome : "")],
+      ]),
+      h("div", { class: "faint", style: "margin-top:10px", text: "Selected jurors" }),
+      h("div", { style: "margin-top:4px" }, (j.selected_jurors || []).map((a) => h("div", { class: "mono", style: "word-break:break-all", text: a }))),
+      (() => {
+        const out = h("div", { class: "out" });
+        const btn = h("button", { class: "ghost", text: "Replay the jury draw" });
+        btn.addEventListener("click", async () => {
+          try {
+            const r = await readJson("verify_jury_selection", [d.deal_id]);
+            showOut(out, r.match ? "The draw replays exactly from the recorded beacon and pool." : "The recorded jury does NOT match a replay of the draw.", r.match ? "ok" : "err");
+          } catch (e) { showOut(out, "Error: " + (e?.message || String(e)), "err"); }
+        });
+        return h("div", null, btn, out);
+      })()));
+  }
+
+  /* ----- contextual actions ----- */
+  const acts = h("div");
+  const st = d.status;
+  const graceMs = Number(cfg.absence_grace_seconds) * 1000;
+  const timeoutMs = Number(cfg.resolution_timeout_seconds) * 1000;
+
+  if (st === "created") {
+    const wrong = account && !isB;
+    const [b1, o1] = actionButton(`Accept and send ${weiToGen(d.stake_amount)} GEN`, "", (out) => write(out, "accept_deal", "accept_deal", [d.deal_id], BigInt(d.stake_amount)));
+    acts.appendChild(actionCard("Accept this deal",
+      wrong ? "You are connected as " + short(account) + ", which is not the developer. Reconnect as " + short(d.party_b) + "; any other wallet is rejected by the contract."
+            : "Only the developer can accept, with exactly the same stake. Before accepting, open the PyPI link above: the version must not exist yet, and your release metadata must link to the agreed repository, otherwise the client wins the pot.", b1, o1));
+    const [b2, o2] = actionButton("Cancel deal", "danger", (out) => write(out, "cancel_deal", "cancel_deal", [d.deal_id]));
+    acts.appendChild(actionCard("Cancel", "Only the client, and only before acceptance. Your stake is refunded.", b2, o2));
+    if (isPast(d.deadline)) {
+      const [b3, o3] = actionButton("Refund the client", "secondary", (out) => write(out, "expire_unaccepted", "expire_unaccepted", [d.deal_id]));
+      acts.appendChild(actionCard("Deadline passed without acceptance", "Anyone can close the deal; the client's stake is refunded.", b3, o3));
+    }
+  }
+
+  if (st === "open") {
+    const pastDeadline = isPast(d.deadline);
+    const ripe = Date.now() > ms(d.deadline) + graceMs;
+    const [b, o2] = actionButton("Resolve now (Tier 1)", "", (out) => write(out, "resolve_tier1", "resolve_tier1", [d.deal_id]));
+    const note = !pastDeadline
+      ? "Anyone can run this. Before the deadline only a proven delivery can be recorded; anything else is rejected and the deal stays open. The developer can resolve as soon as the release is on PyPI."
+      : ripe ? "The deadline and the grace period have passed. Validators read the release record on pypi.org; a missing release counts as evidence only if the project index confirms it."
+             : "The deadline has passed. A missing release is accepted as evidence only after " + fmtTime(ms(d.deadline) + graceMs) + ", so a late upload still has time to appear on the index.";
+    acts.appendChild(actionCard("Get the automated outcome", note + " It can take a minute or two. If PyPI is unreachable or inconsistent the call is rejected and can be repeated.", b, o2));
+    if (Date.now() > ms(d.deadline) + timeoutMs) {
+      const [bx, ox] = actionButton("Close deal and refund both stakes", "secondary", (out) => write(out, "expire_unresolved", "expire_unresolved", [d.deal_id]));
+      acts.appendChild(actionCard("Resolution timed out", "No outcome was produced within " + Math.round(timeoutMs / 86400000) + " days of the deadline. Anyone can close the deal; it ends as undetermined and both stakes are refunded.", bx, ox));
+    }
+  }
+
+  if (st === "tier1_resolved") {
+    const bond = appealBondWei(d.stake_amount, cfg);
+    const jurorNote = h("p", { class: "hint", text: "Checking how many jurors are available..." });
+    acts.appendChild(jurorNote);
+    read("count_eligible_jurors", [d.deal_id]).then((n) => {
+      const c = Number(n), need = Number(cfg.jury_size);
+      jurorNote.textContent = c >= need ? `${c} eligible jurors available (${need} needed).` : `Only ${c} eligible jurors available; an appeal needs ${need}, so appealing would fail right now.`;
+    }).catch(() => { jurorNote.textContent = ""; });
+    const [b, o2] = actionButton(`Appeal with ${weiToGen(bond)} GEN bond`, "secondary", (out) => write(out, "appeal", "appeal", [d.deal_id], bond));
+    acts.appendChild(actionCard("Appeal", `Either party, before ${fmtTime(d.appeal_deadline)}. The jury is drawn after the window from a randomness round that did not exist when you appealed, and judges only the frozen evidence.`, b, o2));
+    const [b3, o3] = actionButton("Finalize without appeal", "", (out) => write(out, "finalize_unappealed", "finalize_unappealed", [d.deal_id]));
+    acts.appendChild(actionCard("Finalize", isPast(d.appeal_deadline) ? "The appeal window has closed. Anyone can finalize." : "Available after the appeal window closes.", b3, o3));
+  }
+
+  if (st === "appeal_filed") {
+    const [bd, od] = actionButton("Draw the jury", "", (out) => write(out, "draw_jury", "draw_jury", [d.deal_id]));
+    acts.appendChild(actionCard("Draw the jury", isPast(d.appeal_deadline)
+      ? "The appeal window has closed. Anyone can draw the jury now; the draw is recorded so it can be replayed."
+      : `Available after ${fmtTime(d.appeal_deadline)} (a short wait for the randomness round may follow).`, bd, od));
+    if (Date.now() > ms(d.appeal_deadline) + timeoutMs) {
+      const [bs, os2] = actionButton("Recover stuck appeal", "secondary", (out) => write(out, "expire_stuck_appeal", "expire_stuck_appeal", [d.deal_id]));
+      acts.appendChild(actionCard("Appeal stuck", "The jury could not be drawn in time. Anyone can recover: the automated outcome stands and the bond is refunded.", bs, os2));
+    }
+  }
+
+  if (st === "appealed") {
+    const j = d.jury;
+    const saved = loadVote(d.deal_id);
+    const mkSelect = () => h("select", null, VOTES.map((x) => h("option", { value: x, text: x })));
+    const voteSel = mkSelect();
+    const saltIn = h("input", { placeholder: "private salt", value: saved?.salt || "", autocapitalize: "off", spellcheck: "false" });
+    if (saved?.vote) voteSel.value = saved.vote;
+    const [bc, oc] = actionButton("Commit vote", "", async (out) => {
+      if (!needClient(out)) return null;
+      const salt = saltIn.value.trim() || randomSalt();
+      saltIn.value = salt;
+      saveVote(d.deal_id, voteSel.value, salt);
+      const hash = await sha256Hex(`${voteSel.value}:${salt}:${String(account || "").toLowerCase()}:${d.deal_id}`);
+      return write(out, "commit_vote", "commit_vote", [d.deal_id, hash]);
+    });
+    acts.appendChild(actionCard("Commit vote (selected jurors only)", `Open until ${fmtTime(j.commit_deadline)}. Your vote and salt are kept in this browser so you can reveal later.`,
+      h("label", { text: "Your vote" }), voteSel, h("label", { text: "Private salt (generated if empty)" }), saltIn, bc, oc));
+    const rVote = mkSelect();
+    const rSalt = h("input", { placeholder: "the same salt", value: saved?.salt || "", autocapitalize: "off", spellcheck: "false" });
+    if (saved?.vote) rVote.value = saved.vote;
+    const [br, or2] = actionButton("Reveal vote", "secondary", (out) => write(out, "reveal_vote", "reveal_vote", [d.deal_id, rVote.value, rSalt.value.trim()]));
+    acts.appendChild(actionCard("Reveal vote", `Opens after ${fmtTime(j.commit_deadline)} and closes ${fmtTime(j.reveal_deadline)}. Must match your commit exactly.`,
+      h("label", { text: "Your vote (same as commit)" }), rVote, h("label", { text: "Same salt" }), rSalt, br, or2));
+    const [bf, of2] = actionButton("Finalize jury round", "", (out) => write(out, "finalize_jury", "finalize_jury", [d.deal_id]));
+    acts.appendChild(actionCard("Finalize jury", isPast(j.reveal_deadline) ? "The reveal window has closed. Anyone can finalize." : `Available after ${fmtTime(j.reveal_deadline)}.`, bf, of2));
+    if (Date.now() > ms(j.reveal_deadline) + timeoutMs) {
+      const [bs, os2] = actionButton("Recover stuck appeal", "secondary", (out) => write(out, "expire_stuck_appeal", "expire_stuck_appeal", [d.deal_id]));
+      acts.appendChild(actionCard("Appeal stuck", "The jury round could not be finalized in time. Anyone can recover: the automated outcome stands, the bond is refunded and jurors are unlocked.", bs, os2));
+    }
+  }
+
+  if (st === "finalized" || st === "cancelled") {
+    acts.appendChild(h("a", { href: "#/withdraw", class: "card link", style: "text-align:center;font-weight:700" }, "Payouts are credited to balances. Open Balance to withdraw"));
+  }
+
+  view.appendChild(acts);
+  view.appendChild(h("button", { class: "ghost", text: "Refresh this deal", onclick: () => renderDeal(id) }));
+}
+
+/* ---------- Jury ---------- */
+$("jRegisterBtn").addEventListener("click", async () => {
+  const out = $("jOut");
+  const wei = genToWei($("jStake").value);
+  if (wei === null || wei <= 0n) return showOut(out, "Enter a valid positive stake in GEN.", "err");
+  await write(out, "register_juror", "register_juror", [], wei);
+});
+$("jUnstakeBtn").addEventListener("click", async () => {
+  const out = $("jOut");
+  const wei = genToWei($("jUnstake").value);
+  if (wei === null || wei <= 0n) return showOut(out, "Enter a valid positive amount in GEN.", "err");
+  await write(out, "unstake_juror", "unstake_juror", [wei.toString()]);
+});
+$("jLookupBtn").addEventListener("click", async () => {
+  const out = $("jLookupOut");
+  const addr = $("jAddr").value.trim() || account;
+  if (!addr) return showOut(out, "Enter an address or connect a wallet.", "err");
+  try {
+    const j = await readJson("get_juror", [addr]);
+    showOut(out, j && j.stake !== undefined ? { ...j, stake_gen: weiToGen(j.stake) } : j, "ok");
+  } catch (e) { showOut(out, "Error: " + (e?.message || String(e)), "err"); }
+});
+
+/* ---------- Balance ---------- */
+async function refreshPending() {
+  if (!account) { $("myPending").textContent = "connect wallet"; return; }
+  try { $("myPending").textContent = weiToGen(await read("get_pending_withdrawal", [account])) + " GEN"; }
+  catch (e) { $("myPending").textContent = "-"; }
+}
+async function refreshContractBalance() {
+  try { $("contractBal").textContent = weiToGen(await read("get_contract_balance")) + " GEN"; }
+  catch (e) { $("contractBal").textContent = "-"; }
+}
+$("checkPendingBtn").addEventListener("click", refreshPending);
+$("withdrawBtn").addEventListener("click", async () => {
+  const r = await write($("wOut"), "withdraw", "withdraw", []);
+  if (r) refreshPending();
+});
+$("wLookupBtn").addEventListener("click", async () => {
+  const out = $("wLookupOut");
+  const addr = $("wAddr").value.trim();
+  if (!addr) return showOut(out, "Enter an address.", "err");
+  try { const raw = await read("get_pending_withdrawal", [addr]); showOut(out, `${weiToGen(raw)} GEN (${raw} wei)`, "ok"); }
+  catch (e) { showOut(out, "Error: " + (e?.message || String(e)), "err"); }
+});
+
+/* ---------- test funding (Studio simulator) ---------- */
+$("fundBtn").addEventListener("click", async () => {
+  const out = $("fundOut");
+  const addr = $("fundAddr").value.trim() || account;
+  const gen = parseInt($("fundAmt").value, 10);
+  if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) return showOut(out, "Enter a valid 0x address or connect a wallet.", "err");
+  if (!Number.isInteger(gen) || gen < 1 || gen > 100) return showOut(out, "Amount must be a whole number from 1 to 100.", "err");
+  const url = studionet.rpcUrls?.default?.http?.[0];
+  if (!url) return showOut(out, "No RPC URL available for this network.", "err");
+  try {
+    showOut(out, "Requesting...");
+    const amountWei = Number(BigInt(gen) * WEI_PER_GEN);
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "sim_fundAccount", params: [addr, amountWei] }) });
+    const body = await res.json();
+    if (body.error) return showOut(out, "The Studio RPC refused: " + JSON.stringify(body.error), "err");
+    showOut(out, "Request accepted. Check the address balance in a few seconds.\n" + JSON.stringify(body.result ?? body), "ok");
+  } catch (e) { showOut(out, "Request failed: " + (e?.message || String(e)), "err"); }
+});
+
+/* ---------- hash router ---------- */
+function route() {
+  const hash = location.hash || "#/";
+  const m = hash.match(/^#\/deal\/([A-Za-z0-9_]+)$/);
+  let name = "home";
+  if (m) name = "deal";
+  else if (hash.startsWith("#/new")) name = "new";
+  else if (hash.startsWith("#/jury")) name = "jury";
+  else if (hash.startsWith("#/withdraw")) name = "withdraw";
+  document.querySelectorAll(".route").forEach((r) => r.classList.toggle("active", r.id === "route-" + name));
+  document.querySelectorAll(".tab-link").forEach((a) => a.classList.toggle("active", a.dataset.tab === (name === "deal" ? "home" : name)));
+  if (name === "home") { renderChips(); loadList(false); }
+  if (name === "deal") renderDeal(m[1]);
+  if (name === "withdraw") { refreshPending(); refreshContractBalance(); }
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>
