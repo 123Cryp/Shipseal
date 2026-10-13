@@ -10,7 +10,7 @@ A client (party A) and a developer (party B) both stake GEN against one exact re
 2. **Absence is evidence.** After the deadline plus a one-hour grace period, a 404 on the version endpoint counts as non-delivery only if the project index endpoint also loads, names the project and lacks the version. A typo or an outage can never produce NOT_DELIVERED.
 3. **Model only confirms.** Free-text delivery criteria are checked by a model only after every structured check passes. A code backstop downgrades any DELIVERED claim that the structure does not support.
 4. **Frozen evidence.** The two fetched pages are stored with a sha256 root. Appeals judge that frozen evidence, never a fresh fetch.
-5. **Appeal.** A staked commit-reveal jury is drawn with a drand round fixed at appeal time. Commits are bound to juror and deal. Wrong and non-revealing jurors are slashed.
+5. **Appeal.** A staked commit-reveal jury is drawn with a drand round fixed at appeal time. Commits are bound to juror and deal. Wrong and non-revealing jurors are slashed, and every new juror address pays a non-refundable registration fee.
 6. **Pull payments.** Settlement only credits balances; `withdraw` zeroes the ledger before transferring.
 
 Outcomes: `DELIVERED` (developer gets the pot), `NOT_DELIVERED` (client gets the pot), `PARTIALLY_DELIVERED` (published on time but a required artifact kind is missing; split evenly), `UNDETERMINED` (each side gets its own stake back). One (package, version) release can settle only one deal.
@@ -42,6 +42,15 @@ After every edit of `contract.py` run `python3 -I tools/make_deploy.py` to regen
 Deploy the full contents of `contract_deploy.py` in GenLayer Studio with no constructor arguments. Then open `index.html?contract=0x<address>` or set `DEFAULT_CONTRACT` in `index.html`.
 
 See `ARCHITECTURE.md` for the design and the known limitations.
+
+## Live deployments (GenLayer Studio)
+
+| Version | Contract | Notes |
+| --- | --- | --- |
+| v1.1 (current) | [`0xab204b0E46703E7D1E8bb3C1da553D9cB9f69067`](https://explorer-studio.genlayer.com/address/0xab204b0E46703E7D1E8bb3C1da553D9cB9f69067) | Adds a non-refundable registration fee for every new juror address, so extra identities in the jury pool are no longer free |
+| v1.0 | [`0xdaf4F564ac28cf7e27F87e786350E307fe336bC5`](https://explorer-studio.genlayer.com/address/0xdaf4F564ac28cf7e27F87e786350E307fe336bC5) | First live deployment; the absence path was verified end to end (`create_deal`, `accept_deal`, `resolve_tier1` returned NOT_DELIVERED with absence proven) |
+
+Frontend: `https://123cryp.github.io/Shipseal/?contract=0xab204b0E46703E7D1E8bb3C1da553D9cB9f69067`
 
 ## License
 

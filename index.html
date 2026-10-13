@@ -235,8 +235,9 @@
     <p class="muted">Stake GEN to be eligible for appeal juries. Selection weight is capped, and only jurors registered before a deal was accepted can be drawn for it.</p>
     <div class="card">
       <h3>Register or top up</h3>
-      <label for="jStake">Stake to add (GEN)</label>
-      <input id="jStake" inputmode="decimal" value="1.0">
+      <label for="jStake">Amount to send (GEN)</label>
+      <input id="jStake" inputmode="decimal" value="2">
+      <p class="hint" id="jFeeHint">The first registration of an address pays a non-refundable fee; everything above it becomes your stake.</p>
       <button id="jRegisterBtn">Register / add stake</button>
       <label for="jUnstake">Unstake amount (GEN)</label>
       <input id="jUnstake" inputmode="decimal" placeholder="0.5">
@@ -505,7 +506,8 @@ async function getConfig() {
   try { configCache = await readJson("get_config"); } catch (e) { configCache = null; }
   return configCache;
 }
-const FALLBACK_CONFIG = { absence_grace_seconds: 3600, resolution_timeout_seconds: 604800, appeal_bond_bps: 2000,
+let configKnownJuror = null;
+const FALLBACK_CONFIG = { juror_registration_fee: "1000000000000000000", absence_grace_seconds: 3600, resolution_timeout_seconds: 604800, appeal_bond_bps: 2000,
   min_appeal_bond: "1000000000000000", max_appeal_bond: "1000000000000000000000000000000", jury_size: 5 };
 
 const STEPS = [["created", "Created"], ["open", "Accepted"], ["tier1_resolved", "Outcome"], ["appealed", "Appeal"], ["finalized", "Final"]];
@@ -901,6 +903,9 @@ $("jRegisterBtn").addEventListener("click", async () => {
   const out = $("jOut");
   const wei = genToWei($("jStake").value);
   if (wei === null || wei <= 0n) return showOut(out, "Enter a valid positive stake in GEN.", "err");
+  const cfg = (await getConfig()) || FALLBACK_CONFIG;
+  const fee = account && configKnownJuror === account ? 0n : BigInt(cfg.juror_registration_fee || "0");
+  if (wei <= fee) return showOut(out, `Send more than the ${weiToGen(fee)} GEN registration fee, otherwise nothing is left to stake.`, "err");
   await write(out, "register_juror", "register_juror", [], wei);
 });
 $("jUnstakeBtn").addEventListener("click", async () => {
@@ -918,6 +923,18 @@ $("jLookupBtn").addEventListener("click", async () => {
     showOut(out, j && j.stake !== undefined ? { ...j, stake_gen: weiToGen(j.stake) } : j, "ok");
   } catch (e) { showOut(out, "Error: " + (e?.message || String(e)), "err"); }
 });
+
+async function refreshJurorHint() {
+  const cfg = (await getConfig()) || FALLBACK_CONFIG;
+  let registered = false;
+  if (account && !NOT_CONFIGURED) {
+    try { const j = await readJson("get_juror", [account]); registered = !!j.registered_at; } catch (e) { /* offline */ }
+  }
+  configKnownJuror = registered ? account : null;
+  $("jFeeHint").textContent = registered
+    ? "This address is already registered, so no fee applies: everything you send is added to your stake."
+    : `First registration of an address costs ${weiToGen(cfg.juror_registration_fee || "0")} GEN, never refunded (it is locked at a burn address). Everything above the fee becomes your stake, and only jurors registered before a deal is accepted can be drawn for it.`;
+}
 
 /* ---------- Balance ---------- */
 async function refreshPending() {
@@ -976,6 +993,7 @@ function route() {
   if (name === "home") { renderChips(); loadList(false); }
   if (name === "deal") renderDeal(m[1]);
   if (name === "withdraw") { refreshPending(); refreshContractBalance(); }
+  if (name === "jury") refreshJurorHint();
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);

@@ -55,7 +55,7 @@ All value is in `u256` wei. Settlement credits `pending_withdrawals`; `withdraw`
 - **PARTIAL does not check the hash.** When a required kind is missing, the sha256 pin is not evaluated.
 - **Tier 2 is mostly deterministic.** The jury mostly re-derives a deterministic result; its leverage is the free-text criteria check.
 - **drand.** The beacon is fetched from a public endpoint; its availability and honesty are assumed.
-- **Juror Sybil.** Stake-weighting with a cap and a registration-age rule limits, but does not eliminate, Sybil jurors.
+- **Juror Sybil.** Each new juror address pays a non-refundable `JUROR_REGISTRATION_FEE` (locked at a burn address), must be registered with its final stake before the deal is accepted, and has a weight cap. This prices identities but does not eliminate collusion: an attacker willing to pay the fee per address can still crowd the pool of a low-value deal, so the fee should stay well above the stake at risk in typical deals.
 - **Studio behaviour.** Payable calls that revert may behave differently in Studio than on a production network.
 - **What is verified.** The contract verifies the release record (identity, timing, files, digest, repository link) and asks a model about the metadata. It does not install or run the code, so it cannot judge code quality.
 - **Sham targets.** A release that already exists on PyPI (or whose files were all deleted before the deal) cannot be told apart from one the developer emptied during the deal. The developer sees every anchor before accepting and must check that the version does not exist yet; the web page links to the PyPI page for that reason.

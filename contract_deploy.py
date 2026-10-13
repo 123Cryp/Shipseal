@@ -11,6 +11,7 @@ KIND_TYPES = {'wheel': 'bdist_wheel', 'sdist': 'sdist'}
 OUTCOMES = ('DELIVERED', 'PARTIALLY_DELIVERED', 'NOT_DELIVERED', 'UNDETERMINED')
 CLAIMING_OUTCOMES = ('DELIVERED', 'PARTIALLY_DELIVERED')
 ABSENCE_GRACE_SECONDS = 3600
+BURN_ADDRESS = '0x000000000000000000000000000000000000dead'
 MAX_BODY_CHARS = 20000000
 MAX_PAGE_CHARS = 100000
 RELEASE_BUDGET_CHARS = 80000
@@ -464,6 +465,7 @@ class ShipSeal(gl.Contract):
     MAX_JURY_POOL = 100
     MAX_REGISTERED_JURORS = 1000
     MIN_JUROR_STAKE = u256(10 ** 15)
+    JUROR_REGISTRATION_FEE = u256(10 ** 18)
     MAX_EFFECTIVE_STAKE = u256(10 ** 24)
     WRONG_VOTE_SLASH_BPS = 1000
     NON_REVEAL_SLASH_BPS = 1500
@@ -787,17 +789,20 @@ class ShipSeal(gl.Contract):
 
     @gl.public.write.payable
     def register_juror(self) -> str:
-        amount = u256(gl.message.value)
-        if amount < self.MIN_JUROR_STAKE:
-            raise gl.vm.UserError(f'Must stake at least {int(self.MIN_JUROR_STAKE)} wei of GEN')
+        amount = int(gl.message.value)
         caller = gl.message.sender_address
-        if self._address_key(caller) not in self.jurors:
+        is_new = self._address_key(caller) not in self.jurors
+        fee = int(self.JUROR_REGISTRATION_FEE) if is_new else 0
+        if amount < fee + int(self.MIN_JUROR_STAKE):
+            raise gl.vm.UserError(f'Must send at least {fee + int(self.MIN_JUROR_STAKE)} wei of GEN ({fee} non-refundable registration fee plus {int(self.MIN_JUROR_STAKE)} minimum stake)')
+        if is_new:
             if int(self.juror_count) >= self.MAX_REGISTERED_JURORS:
                 raise gl.vm.UserError('The juror registry is full')
             self.juror_count = u256(int(self.juror_count) + 1)
+            self._credit(BURN_ADDRESS, u256(fee))
         record = self._load_juror(caller)
         now = self._now_utc()
-        record['stake'] = str(int(record['stake']) + int(amount))
+        record['stake'] = str(int(record['stake']) + amount - fee)
         if not record.get('registered_at'):
             record['registered_at'] = now.isoformat()
         record['stake_updated_at'] = now.isoformat()
@@ -1175,7 +1180,7 @@ class ShipSeal(gl.Contract):
 
     @gl.public.view
     def get_config(self) -> str:
-        return json.dumps({'min_stake': str(int(self.MIN_STAKE)), 'min_appeal_bond': str(int(self.MIN_APPEAL_BOND)), 'max_appeal_bond': str(int(self.MAX_APPEAL_BOND)), 'min_deadline_lead_seconds': self.MIN_DEADLINE_LEAD_SECONDS, 'max_deadline_lead_seconds': self.MAX_DEADLINE_LEAD_SECONDS, 'appeal_window_seconds': self.APPEAL_WINDOW_SECONDS, 'commit_window_seconds': self.COMMIT_WINDOW_SECONDS, 'reveal_window_seconds': self.REVEAL_WINDOW_SECONDS, 'resolution_timeout_seconds': self.RESOLUTION_TIMEOUT_SECONDS, 'absence_grace_seconds': ABSENCE_GRACE_SECONDS, 'jury_size': self.JURY_SIZE, 'min_juror_stake': str(int(self.MIN_JUROR_STAKE)), 'appeal_bond_bps': self.APPEAL_BOND_BPS, 'evidence_host': PYPI_HOST}, sort_keys=True)
+        return json.dumps({'min_stake': str(int(self.MIN_STAKE)), 'min_appeal_bond': str(int(self.MIN_APPEAL_BOND)), 'max_appeal_bond': str(int(self.MAX_APPEAL_BOND)), 'min_deadline_lead_seconds': self.MIN_DEADLINE_LEAD_SECONDS, 'max_deadline_lead_seconds': self.MAX_DEADLINE_LEAD_SECONDS, 'appeal_window_seconds': self.APPEAL_WINDOW_SECONDS, 'commit_window_seconds': self.COMMIT_WINDOW_SECONDS, 'reveal_window_seconds': self.REVEAL_WINDOW_SECONDS, 'resolution_timeout_seconds': self.RESOLUTION_TIMEOUT_SECONDS, 'absence_grace_seconds': ABSENCE_GRACE_SECONDS, 'jury_size': self.JURY_SIZE, 'min_juror_stake': str(int(self.MIN_JUROR_STAKE)), 'juror_registration_fee': str(int(self.JUROR_REGISTRATION_FEE)), 'appeal_bond_bps': self.APPEAL_BOND_BPS, 'evidence_host': PYPI_HOST}, sort_keys=True)
 
     @gl.public.view
     def get_release_claim(self, package: str, version: str) -> str:
