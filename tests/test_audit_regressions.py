@@ -97,6 +97,55 @@ class JurorRegistryBounds(unittest.TestCase):
             m.ShipSeal.MAX_REGISTERED_JURORS = original
 
 
+class JurorRegistrationFee(unittest.TestCase):
+    def setUp(self):
+        self.original = m.ShipSeal.JUROR_REGISTRATION_FEE
+        m.ShipSeal.JUROR_REGISTRATION_FEE = m.u256(100)
+
+    def tearDown(self):
+        m.ShipSeal.JUROR_REGISTRATION_FEE = self.original
+
+    def test_first_registration_pays_a_non_refundable_fee_into_the_burn_address(self):
+        c = make_contract()
+        set_caller(STRANGER)
+        call_payable(c, "register_juror", 150)
+        rec = json.loads(c.get_juror(STRANGER))
+        self.assertEqual(rec["stake"], "50")
+        self.assertEqual(c.get_pending_withdrawal(m.BURN_ADDRESS), "100")
+
+    def test_the_fee_is_charged_once_per_address(self):
+        c = make_contract()
+        set_caller(STRANGER)
+        call_payable(c, "register_juror", 150)
+        call_payable(c, "register_juror", 7)
+        self.assertEqual(json.loads(c.get_juror(STRANGER))["stake"], "57")
+        self.assertEqual(c.get_pending_withdrawal(m.BURN_ADDRESS), "100")
+
+    def test_payment_below_fee_plus_minimum_stake_is_rejected(self):
+        c = make_contract()
+        set_caller(STRANGER)
+        for value in (1, 100, 100):
+            with self.assertRaises(gl.vm.UserError):
+                call_payable(c, "register_juror", value)
+        self.assertEqual(c.get_pending_withdrawal(m.BURN_ADDRESS), "0")
+        self.assertEqual(int(c.juror_count), 0)
+
+    def test_the_fee_cannot_be_unstaked_or_withdrawn(self):
+        c = make_contract()
+        c.balance = m.u256(150)
+        set_caller(STRANGER)
+        call_payable(c, "register_juror", 150)
+        with self.assertRaises(gl.vm.UserError):
+            c.unstake_juror("51")
+        c.unstake_juror("50")
+        set_caller(STRANGER)
+        c.withdraw()
+        self.assertEqual(c.get_pending_withdrawal(m.BURN_ADDRESS), "100")
+
+    def test_config_exposes_the_fee(self):
+        self.assertEqual(json.loads(make_contract().get_config())["juror_registration_fee"], "100")
+
+
 class DocstringsMatchCode(unittest.TestCase):
     def test_no_stale_references(self):
         with open(m.__file__, encoding="utf-8") as fh:

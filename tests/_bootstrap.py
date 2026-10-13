@@ -27,6 +27,7 @@ u256 = m.u256
 
 ShipSeal.MIN_STAKE = u256(1)
 ShipSeal.MIN_JUROR_STAKE = u256(1)
+ShipSeal.JUROR_REGISTRATION_FEE = u256(0)
 ShipSeal.MIN_APPEAL_BOND = u256(1)
 
 CLIENT = "0x" + "11" * 20
